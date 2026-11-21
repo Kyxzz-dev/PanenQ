@@ -61,9 +61,11 @@ router.get('/harvesters', (_req, res) => {
 router.post('/harvesters', (req, res) => {
   const name = String(req.body.name ?? '').trim();
   const employeeCode = String(req.body.employee_code ?? '').trim();
+  const isActive = req.body.is_active === false || req.body.is_active === 0 ? 0 : 1;
   if (!name) return res.status(400).json({ message: 'Nama pemanen wajib diisi.' });
   try {
-    const result = db.prepare('INSERT INTO harvesters (name, employee_code) VALUES (?, ?)').run(name, employeeCode || null);
+    const result = db.prepare('INSERT INTO harvesters (name, employee_code, is_active) VALUES (?, ?, ?)')
+      .run(name, employeeCode || null, isActive);
     res.status(201).json(db.prepare('SELECT * FROM harvesters WHERE id = ?').get(result.lastInsertRowid));
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: 'Kode pekerja sudah digunakan.' });
