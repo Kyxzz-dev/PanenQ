@@ -45,7 +45,9 @@ router.delete('/locations/:id', (req, res) => {
     if (!result.changes) return res.status(404).json({ message: 'Lokasi tidak ditemukan.' });
     res.json({ message: 'Lokasi berhasil dihapus.' });
   } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return res.status(409).json({ message: 'Lokasi masih digunakan pada catatan panen.' });
+    if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY' || error.code === 'SQLITE_CONSTRAINT_TRIGGER') {
+      return res.status(409).json({ message: 'Lokasi masih digunakan pada catatan panen atau perawatan.' });
+    }
     throw error;
   }
 });

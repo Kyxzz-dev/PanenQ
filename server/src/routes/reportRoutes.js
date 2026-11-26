@@ -1,5 +1,11 @@
 import { Router } from 'express';
 import db from '../config/database.js';
+import {
+  MAINTENANCE_TYPES,
+  buildMaintenanceFilterClause,
+  formatMaintenanceRow,
+  maintenanceSelectSql,
+} from './maintenanceRoutes.js';
 
 const router = Router();
 
@@ -47,6 +53,97 @@ router.get('/reports/summary', (req, res) => {
     FROM harvest_records WHERE harvest_date BETWEEN ? AND ?
   `).get(startDate, endDate);
   res.json({ startDate, endDate, totals, byLocation });
+});
+
+router.get('/reports/maintenance', (req, res) => {
+  const { where, params, error } = buildMaintenanceFilterClause(req.query);
+  if (error) return res.status(400).json({ message: error });
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const totalsRow = db.prepare(`
+    SELECT
+      COUNT(*) AS total_activities,
+      COALESCE(SUM(mr.material_cost), 0) AS total_material_cost,
+      COALESCE(SUM(mr.labor_cost), 0) AS total_labor_cost
+    FROM maintenance_records mr
+    JOIN locations l ON l.id = mr.location_id
+    ${whereSql}
+  `).get(...params);
+
+  const byTypeRows = db.prepare(`
+    SELECT
+      mr.maintenance_type,
+      COUNT(*) AS total_activities,
+      COALESCE(SUM(mr.material_cost), 0) AS total_material_cost,
+      COALESCE(SUM(mr.labor_cost), 0) AS total_labor_cost
+    FROM maintenance_records mr
+    JOIN locations l ON l.id = mr.location_id
+    ${whereSql}
+    GROUP BY mr.maintenance_type
+  `).all(...params);
+
+  const byTypeMap = new Map(byTypeRows.map((row) => [row.maintenance_type, row]));
+  const byType = MAINTENANCE_TYPES.map((type) => {
+    const row = byTypeMap.get(type);
+    const materialCost = Number(row?.total_material_cost || 0);
+    const laborCost = Number(row?.total_labor_cost || 0);
+    return {
+      maintenanceType: type,
+      totalActivities: Number(row?.total_activities || 0),
+      totalMaterialCost: materialCost,
+      totalLaborCost: laborCost,
+      totalCost: materialCost + laborCost,
+    };
+  });
+
+  const byLocation = db.prepare(`
+    SELECT
+      l.id,
+      l.name,
+      COUNT(mr.id) AS total_activities,
+      COALESCE(SUM(mr.material_cost), 0) AS total_material_cost,
+      COALESCE(SUM(mr.labor_cost), 0) AS total_labor_cost
+    FROM maintenance_records mr
+    JOIN locations l ON l.id = mr.location_id
+    ${whereSql}
+    GROUP BY l.id
+    ORDER BY (COALESCE(SUM(mr.material_cost), 0) + COALESCE(SUM(mr.labor_cost), 0)) DESC, l.name ASC
+  `).all(...params).map((row) => {
+    const materialCost = Number(row.total_material_cost || 0);
+    const laborCost = Number(row.total_labor_cost || 0);
+    return {
+      id: row.id,
+      name: row.name,
+      totalActivities: Number(row.total_activities || 0),
+      totalMaterialCost: materialCost,
+      totalLaborCost: laborCost,
+      totalCost: materialCost + laborCost,
+    };
+  });
+
+  const records = db.prepare(`
+    ${maintenanceSelectSql}
+    ${whereSql}
+    ORDER BY mr.maintenance_date DESC, mr.id DESC
+  `).all(...params).map(formatMaintenanceRow);
+
+  const totalMaterialCost = Number(totalsRow.total_material_cost || 0);
+  const totalLaborCost = Number(totalsRow.total_labor_cost || 0);
+
+  res.json({
+    startDate: req.query.startDate || null,
+    endDate: req.query.endDate || null,
+    totals: {
+      totalActivities: Number(totalsRow.total_activities || 0),
+      totalMaterialCost,
+      totalLaborCost,
+      totalCost: totalMaterialCost + totalLaborCost,
+    },
+    byType,
+    byLocation,
+    records,
+  });
 });
 
 export default router;

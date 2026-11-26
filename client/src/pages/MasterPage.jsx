@@ -34,28 +34,9 @@ export default function MasterPage({ type, rows, onAdd, onEdit, onDelete }) {
                   : r.employee_code || 'Kode pekerja belum diisi'}
               </span>
               {!isLocation && (
-                <div style={{ marginTop: '4px' }}>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      padding: '2px 7px',
-                      borderRadius: '999px',
-                      background: r.is_active ? '#eaf5ec' : '#f5f5f5',
-                      color: r.is_active ? '#2e7049' : '#888',
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: '5px',
-                        height: '5px',
-                        borderRadius: '50%',
-                        background: r.is_active ? '#46ad68' : '#aaa',
-                      }}
-                    />
+                <div className="master-status-wrap">
+                  <span className={`status-pill ${r.is_active ? 'active' : 'inactive'}`}>
+                    <span className="status-pill-dot" />
                     {r.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </div>

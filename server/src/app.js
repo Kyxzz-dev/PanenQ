@@ -4,6 +4,7 @@ import cors from 'cors';
 import db from './config/database.js';
 import masterRoutes from './routes/masterRoutes.js';
 import harvestRoutes from './routes/harvestRoutes.js';
+import maintenanceRoutes from './routes/maintenanceRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 
 const app = express();
@@ -25,6 +26,7 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', database: 'connected' }));
 app.use('/api', masterRoutes);
 app.use('/api/harvest-records', harvestRoutes);
+app.use('/api/maintenance-records', maintenanceRoutes);
 app.use('/api', reportRoutes);
 
 app.use((req, res) => res.status(404).json({ message: `Endpoint tidak ditemukan: ${req.method} ${req.path}` }));
