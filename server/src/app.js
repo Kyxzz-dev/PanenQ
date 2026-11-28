@@ -21,7 +21,7 @@ app.use(
     },
   })
 );
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', database: 'connected' }));
 app.use('/api', masterRoutes);

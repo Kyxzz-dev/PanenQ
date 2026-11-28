@@ -1,24 +1,61 @@
 import { Router } from 'express';
 import db from '../config/database.js';
+import { validateGeoJSON } from '../utils/geojsonValidation.js';
 
 const router = Router();
 
+function parsePositiveId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function locationMeta(row) {
+  if (!row) return row;
+  const { geojson, ...rest } = row;
+  return { ...rest, hasGeojson: Boolean(geojson && geojson.trim()) };
+}
+
 router.get('/locations', (_req, res) => {
   const rows = db.prepare(`
-    SELECT l.*, COUNT(hr.id) AS record_count
+    SELECT l.id, l.name, l.description, l.created_at, l.geojson, COUNT(hr.id) AS record_count
     FROM locations l LEFT JOIN harvest_records hr ON hr.location_id = l.id
     GROUP BY l.id ORDER BY l.name
   `).all();
-  res.json(rows);
+  res.json(rows.map((row) => {
+    const { geojson, ...rest } = row;
+    return { ...rest, hasGeojson: Boolean(geojson) };
+  }));
+});
+
+router.get('/locations/:id', (req, res) => {
+  const id = parsePositiveId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'ID lokasi tidak valid.' });
+  const row = db.prepare(`
+    SELECT l.*, COUNT(hr.id) AS record_count
+    FROM locations l LEFT JOIN harvest_records hr ON hr.location_id = l.id
+    WHERE l.id = ? GROUP BY l.id
+  `).get(id);
+  if (!row) return res.status(404).json({ message: 'Lokasi tidak ditemukan.' });
+  res.json(locationMeta(row));
 });
 
 router.post('/locations', (req, res) => {
   const name = String(req.body.name ?? '').trim();
   const description = String(req.body.description ?? '').trim();
   if (!name) return res.status(400).json({ message: 'Nama lokasi wajib diisi.' });
+
+  let geojsonValue = null;
+  if (req.body.geojson !== undefined && req.body.geojson !== null) {
+    const check = validateGeoJSON(req.body.geojson);
+    if (!check.valid) return res.status(400).json({ message: check.message });
+    geojsonValue = JSON.stringify(check.normalized);
+  }
+
   try {
-    const result = db.prepare('INSERT INTO locations (name, description) VALUES (?, ?)').run(name, description || null);
-    res.status(201).json(db.prepare('SELECT * FROM locations WHERE id = ?').get(result.lastInsertRowid));
+    const result = db.prepare('INSERT INTO locations (name, description, geojson) VALUES (?, ?, ?)')
+      .run(name, description || null, geojsonValue);
+    const row = db.prepare('SELECT * FROM locations WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(locationMeta(row));
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: 'Nama lokasi sudah digunakan.' });
     throw error;
@@ -26,18 +63,58 @@ router.post('/locations', (req, res) => {
 });
 
 router.put('/locations/:id', (req, res) => {
+  const id = parsePositiveId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'ID lokasi tidak valid.' });
   const name = String(req.body.name ?? '').trim();
   const description = String(req.body.description ?? '').trim();
   if (!name) return res.status(400).json({ message: 'Nama lokasi wajib diisi.' });
   try {
-    const result = db.prepare('UPDATE locations SET name = ?, description = ? WHERE id = ?').run(name, description || null, req.params.id);
+    const result = db.prepare('UPDATE locations SET name = ?, description = ? WHERE id = ?')
+      .run(name, description || null, id);
     if (!result.changes) return res.status(404).json({ message: 'Lokasi tidak ditemukan.' });
-    res.json(db.prepare('SELECT * FROM locations WHERE id = ?').get(req.params.id));
+    const row = db.prepare('SELECT * FROM locations WHERE id = ?').get(id);
+    res.json(locationMeta(row));
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: 'Nama lokasi sudah digunakan.' });
     throw error;
   }
 });
+
+router.get('/locations/:id/geojson', (req, res) => {
+  const id = parsePositiveId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'ID lokasi tidak valid.' });
+  const row = db.prepare('SELECT geojson FROM locations WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ message: 'Lokasi tidak ditemukan.' });
+  if (!row.geojson) {
+    return res.status(404).json({ code: 'GEOJSON_NOT_FOUND', message: 'Lokasi belum memiliki batas GeoJSON.' });
+  }
+  res.json({ id, geojson: JSON.parse(row.geojson) });
+});
+
+router.put('/locations/:id/geojson', (req, res) => {
+  const id = parsePositiveId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'ID lokasi tidak valid.' });
+  const existing = db.prepare('SELECT id, geojson FROM locations WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ message: 'Lokasi tidak ditemukan.' });
+
+  const check = validateGeoJSON(req.body.geojson);
+  if (!check.valid) {
+    // GeoJSON lama tetap dipertahankan saat validasi gagal.
+    return res.status(400).json({ message: check.message });
+  }
+
+  db.prepare('UPDATE locations SET geojson = ? WHERE id = ?').run(JSON.stringify(check.normalized), id);
+  res.json({ id, geojson: check.normalized, message: 'Batas GeoJSON berhasil disimpan.' });
+});
+
+router.delete('/locations/:id/geojson', (req, res) => {
+  const id = parsePositiveId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'ID lokasi tidak valid.' });
+  const result = db.prepare('UPDATE locations SET geojson = NULL WHERE id = ?').run(id);
+  if (!result.changes) return res.status(404).json({ message: 'Lokasi tidak ditemukan.' });
+  res.json({ message: 'Batas GeoJSON berhasil dihapus.' });
+});
+
 
 router.delete('/locations/:id', (req, res) => {
   try {

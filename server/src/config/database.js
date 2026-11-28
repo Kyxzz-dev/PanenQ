@@ -83,4 +83,9 @@ if (!maintenanceCols.includes('work_type')) {
   db.exec('ALTER TABLE maintenance_records ADD COLUMN work_type TEXT');
 }
 
+const locationCols = db.prepare('PRAGMA table_info(locations)').all().map((col) => col.name);
+if (!locationCols.includes('geojson')) {
+  db.exec('ALTER TABLE locations ADD COLUMN geojson TEXT');
+}
+
 export default db;

@@ -53,4 +53,5 @@ export const navItems = navSections.flatMap((section) => section.items);
 export const pageTitles = {
   ...Object.fromEntries(navItems.map((item) => [item.id, item.label])),
   'maintenance-detail': 'Detail Perawatan',
+  'location-detail': 'Detail Lokasi / Batas GeoJSON',
 };

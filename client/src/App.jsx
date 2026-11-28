@@ -11,6 +11,7 @@ import MaintenanceRecordsPage from './pages/MaintenanceRecordsPage.jsx';
 import MaintenanceFormPage from './pages/MaintenanceFormPage.jsx';
 import MaintenanceDetailPage from './pages/MaintenanceDetailPage.jsx';
 import MaintenanceReportPage from './pages/MaintenanceReportPage.jsx';
+import LocationDetailPage from './pages/LocationDetailPage.jsx';
 import RecordModal from './components/records/RecordModal.jsx';
 import MasterModal from './components/masters/MasterModal.jsx';
 import useHarvestData from './hooks/useHarvestData.js';
@@ -26,6 +27,7 @@ export default function App() {
   const [masterModal, setMasterModal] = useState(null);
   const [editingMaintenance, setEditingMaintenance] = useState(null);
   const [detailMaintenance, setDetailMaintenance] = useState(null);
+  const [detailLocation, setDetailLocation] = useState(null);
   const [toast, setToast] = useState('');
   const { theme, toggleTheme } = useTheme();
 
@@ -101,6 +103,12 @@ export default function App() {
     setMobileOpen(false);
   };
 
+  const openLocationDetail = (location) => {
+    setDetailLocation(location);
+    setPage('location-detail');
+    setMobileOpen(false);
+  };
+
   const filterMaintenanceByType = (type) => {
     setMaintenanceFilters((prev) => ({ ...prev, maintenanceType: type }));
     setPage('maintenance-records');
@@ -168,14 +176,27 @@ export default function App() {
   }
 
   async function saveMaster(payload) {
-    const { type, id, ...body } = payload;
+    const { type, id, geojson, ...body } = payload;
     const endpoint = type === 'location' ? '/locations' : '/harvesters';
     try {
+      let savedId = id;
       if (id) {
         await api.put(`${endpoint}/${id}`, body);
       } else {
-        await api.post(endpoint, body);
+        const created = await api.post(endpoint, body);
+        savedId = created?.id;
       }
+
+      if (type === 'location' && geojson !== undefined && savedId) {
+        if (geojson === null) {
+          await api.delete(`/locations/${savedId}/geojson`).catch((e) => {
+            if (!/belum memiliki|tidak ditemukan/i.test(e.message)) throw e;
+          });
+        } else {
+          await api.put(`/locations/${savedId}/geojson`, { geojson });
+        }
+      }
+
       setMasterModal(null);
       notify('Data berhasil disimpan.');
       await refreshAll();
@@ -258,6 +279,20 @@ export default function App() {
                 onAdd={() => setMasterModal({ type: 'location' })}
                 onEdit={(r) => setMasterModal({ type: 'location', ...r })}
                 onDelete={(id) => deleteMaster('location', id)}
+                onDetailLocation={openLocationDetail}
+              />
+            )}
+
+            {page === 'location-detail' && (
+              <LocationDetailPage
+                locationId={detailLocation?.id}
+                initialLocation={detailLocation}
+                onBack={() => setPage('locations')}
+                onEdit={(loc) => setMasterModal({ type: 'location', ...loc })}
+                onDeleted={async () => {
+                  setPage('locations');
+                  await refreshAll();
+                }}
               />
             )}
 

@@ -1,7 +1,8 @@
-import { Plus, MapPinned, Users, Pencil, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, MapPinned, Users, Pencil, Trash2, Eye, CheckCircle2 } from 'lucide-react';
 import PageHeading from '../components/common/PageHeading.jsx';
 
-export default function MasterPage({ type, rows, onAdd, onEdit, onDelete }) {
+export default function MasterPage({ type, rows, onAdd, onEdit, onDelete, onDetailLocation }) {
   const isLocation = type === 'location';
 
   return (
@@ -33,6 +34,23 @@ export default function MasterPage({ type, rows, onAdd, onEdit, onDelete }) {
                   ? r.description || 'Lokasi kebun'
                   : r.employee_code || 'Kode pekerja belum diisi'}
               </span>
+
+              {isLocation && (
+                <div className="master-status-wrap">
+                  {r.hasGeojson ? (
+                    <span className="status-pill active" title="Batas geografis tersedia">
+                      <span className="status-pill-dot" />
+                      GeoJSON Tersedia
+                    </span>
+                  ) : (
+                    <span className="status-pill inactive" title="Belum memiliki GeoJSON">
+                      <span className="status-pill-dot" />
+                      Belum Ada Batas
+                    </span>
+                  )}
+                </div>
+              )}
+
               {!isLocation && (
                 <div className="master-status-wrap">
                   <span className={`status-pill ${r.is_active ? 'active' : 'inactive'}`}>
@@ -47,13 +65,29 @@ export default function MasterPage({ type, rows, onAdd, onEdit, onDelete }) {
               <small>catatan</small>
             </div>
             <div className="row-actions">
-              <button className="icon-btn small" onClick={() => onEdit(r)} type="button">
+              {isLocation && onDetailLocation && (
+                <button
+                  className="icon-btn small"
+                  onClick={() => onDetailLocation(r)}
+                  type="button"
+                  title="Lihat detail & batas GeoJSON"
+                >
+                  <Eye size={15} />
+                </button>
+              )}
+              <button
+                className="icon-btn small"
+                onClick={() => onEdit(r)}
+                type="button"
+                title="Ubah data"
+              >
                 <Pencil size={15} />
               </button>
               <button
                 className="icon-btn small danger"
                 onClick={() => onDelete(r.id)}
                 type="button"
+                title="Hapus data"
               >
                 <Trash2 size={15} />
               </button>

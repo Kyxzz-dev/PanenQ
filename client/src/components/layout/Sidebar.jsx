@@ -50,7 +50,8 @@ export default function Sidebar({
               {section.items.map((item) => {
                 const isActive =
                   page === item.id ||
-                  (page === 'maintenance-detail' && item.id === 'maintenance-records');
+                  (page === 'maintenance-detail' && item.id === 'maintenance-records') ||
+                  (page === 'location-detail' && item.id === 'locations');
                 return (
                   <button
                     key={item.id}
